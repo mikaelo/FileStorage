@@ -25,8 +25,8 @@ namespace Proxy
             var client = new SslCertificateWebClient(new SslCertificate(sslServer, sslThumbprint));
 
             return SendRequest(client, serviceUrl, model, serviceTimeout);
-        }
 
+        }
 
         private HttpResponseMessage SendRequest(SslCertificateWebClient client, string serviceUrl, CardStatementDto model, int serviceTimeout)
         {
@@ -37,32 +37,26 @@ namespace Proxy
                 "User: {0} getting card statement for account {1} on date {2} from '{3}': ", model.Guid,
                 model.Agid, model.Abstract_period, serviceUrl);
 
-            var errorMessageTemplate = requestInfo + ", error: {0}";
-
-            Func<string, HttpResponseMessage> invalidResponseBuilder = x =>
-            {
-                var errorMessage = string.Format(errorMessageTemplate, x);
-                var statusCode = string.Format(errorMessageTemplate, "remote access error");
-                Trace.Write(errorMessage);
-                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
-                {
-                    Content = new StringContent(errorMessage),
-                    ReasonPhrase = statusCode
-                };
-            };
-
             try
             {
                 var remoteResponse = client.SendPostRequest(serviceUrl, parameters, serviceTimeout);
-                return ProcessRemoteResponse(remoteResponse, invalidResponseBuilder);
+                return ProcessRemoteResponse(remoteResponse);
             }
             catch (WebException ex)
             {
-                return ProcessRemoteErrorResponse(ex, requestInfo);
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                {
+                    Content = new StringContent(string.Format("Request: {0}, Web exception: status: {1}, exception: {2}", requestInfo, ex.Status, ex)),
+                    ReasonPhrase = ex.Status.ToString()
+                };
             }
             catch (Exception ex)
             {
-                return invalidResponseBuilder(string.Format("Unexpected exception: {0}", ex.Message));
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                {
+                    Content = new StringContent(string.Format("Request: {0}, Unexpected exception: {1}", requestInfo, ex)),
+                    ReasonPhrase = "unexpected exception"
+                };
             }
         }
 
@@ -82,13 +76,10 @@ namespace Proxy
             }
         }
 
-        private HttpResponseMessage ProcessRemoteResponse(WebResponse remoteResponse,
-            Func<string, HttpResponseMessage> invalidResponseBuilder)
+        private HttpResponseMessage ProcessRemoteResponse(WebResponse remoteResponse)
         {
             if (null == remoteResponse)
-            {
-                return invalidResponseBuilder("null response received");
-            }
+                throw new ArgumentNullException("null response received");
 
             var webResponseStream = new WebResponseStream(remoteResponse);
 
@@ -99,14 +90,5 @@ namespace Proxy
             return message;
         }
 
-        private HttpResponseMessage ProcessRemoteErrorResponse(WebException ex, string requesInfo)
-        {
-            var response = (HttpWebResponse) ex.Response;
-
-            var message = new HttpResponseMessage();
-            message.StatusCode = HttpStatusCode.InternalServerError;
-            message.Content = new StringContent(requesInfo + " " + ex.ToString());
-            return message;
-        }
     }
 }
