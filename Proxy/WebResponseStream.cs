@@ -15,7 +15,7 @@ namespace Proxy
             _remoteResponse = remoteResponse;
         }
 
-        public async void WriteToStream(Stream outputStream, HttpContent content, TransportContext context)
+        public void WriteToStream(Stream outputStream, HttpContent content, TransportContext context)
         {
             try
             {
@@ -23,25 +23,28 @@ namespace Proxy
                 {
                     if (remoteStream == null)
                         throw new ArgumentNullException("null remote stream");
+                    //await remoteStream.CopyToAsync(outputStream);
+                    // async version consume more memory
 
                     var buffer = new byte[BufferSize];
                     var loopCount = 0;
 
                     while (true)
                     {
-                        var read = await remoteStream.ReadAsync(buffer, 0, BufferSize);
+                        var read = remoteStream.Read(buffer, 0, BufferSize);
 
                         if (read <= 0)
                             break;
-
-                        await outputStream.WriteAsync(buffer, 0, read);
+ 
+                        outputStream.Write(buffer, 0, read);
 
                         loopCount++;
                         if (loopCount%32 == 0)
-                            await outputStream.FlushAsync();
+                            outputStream.FlushAsync();
                     }
 
                     buffer = null;
+                    
                 }
 
             }
